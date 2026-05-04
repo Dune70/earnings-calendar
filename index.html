@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earnings Calendar</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 24px 20px 32px;
+    min-height: 100vh;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .header h1 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: #f0f6ff;
+    letter-spacing: -0.02em;
+  }
+  .week-label {
+    color: #6e7681;
+    font-size: 0.82rem;
+    margin-top: 5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .calendar {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    align-items: flex-start;
+  }
+
+  .day-col {
+    min-width: 210px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .day-header {
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 10px 8px;
+    border-radius: 10px;
+    background: #161b22;
+    color: #8b949e;
+    border: 1px solid #30363d;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .day-header.today {
+    background: #0f2a1a;
+    color: #3fb950;
+    border-color: #238636;
+  }
+
+  /* BEFORE OPEN — amber / warm */
+  .section.before {
+    background: #13110a;
+    border: 1px solid #3d2e0a;
+    border-top: 3px solid #d97706;
+    border-radius: 12px;
+    padding: 12px;
+  }
+  /* AFTER CLOSE — blue / cool */
+  .section.after {
+    background: #0a0e18;
+    border: 1px solid #0d1e3a;
+    border-top: 3px solid #2563eb;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .section-label {
+    font-size: 0.67rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .section-label.before { color: #f59e0b; }
+  .section-label.after  { color: #3b82f6; }
+
+  .stocks-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .stock-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .stock-item:hover .logo-wrap {
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  }
+
+  .logo-wrap {
+    width: 50px;
+    height: 50px;
+    border-radius: 11px;
+    overflow: hidden;
+    background: #1c2333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.58rem;
+    color: #fff;
+    text-align: center;
+    padding: 2px;
+    line-height: 1.15;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+  .logo-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 9px;
+    padding: 3px;
+    background: #fff;
+    display: block;
+  }
+
+  .ticker {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #8b949e;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+
+  .more-badge .logo-wrap {
+    background: #1c2333;
+    color: #6e7681;
+    font-size: 0.85rem;
+    border: 1px dashed #30363d;
+  }
+  .more-badge .ticker { color: #484f58; }
+
+  .footer {
+    text-align: center;
+    font-size: 0.7rem;
+    color: #484f58;
+    margin-top: 24px;
+    letter-spacing: 0.03em;
+  }
+
+  ::-webkit-scrollbar { height: 5px; width: 5px; }
+  ::-webkit-scrollbar-track { background: #0d1117; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+  @media (max-width: 860px) {
+    .calendar { flex-direction: column; }
+    .day-col { min-width: 100%; }
+    .stocks-grid { grid-template-columns: repeat(5, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📅 Earnings Calendar</h1>
+  <p class="week-label" id="weekLabel"><!-- injected by JS --></p>
+</div>
+
+<div class="calendar" id="cal"></div>
+<div class="footer" id="footer"></div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const LOGO_TOKEN = 'pk_Nsn2X5RzSj-MdBG8xybfNA';
+const logoCache  = {};
+
+// ─── FALLBACK COLORS ───────────────────────────────────────────────────────
+const COLORS = {
+  A:'#1e6feb',B:'#cf222e',C:'#1f6feb',D:'#b08800',
+  E:'#1a7f37',F:'#8250df',G:'#cf222e',H:'#0969da',
+  I:'#9a6700',J:'#6e7781',K:'#0d7377',L:'#bc4c00',
+  M:'#a40e26',N:'#1a7f37',O:'#6639ba',P:'#0550ae',
+  Q:'#953800',R:'#116329',S:'#24292f',T:'#0087a8',
+  U:'#512a97',V:'#c0282d',W:'#0d7377',X:'#454f58',
+  Y:'#7d4e00',Z:'#116329'
+};
+function fallbackColor(t) { return COLORS[t[0].toUpperCase()] || '#30363d'; }
+
+// ─── LOGO FETCH ─────────────────────────────────────────────────────────────
+async function fetchLogo(ticker) {
+  try {
+    const res = await fetch(
+      `https://img.logo.dev/ticker/${ticker}?token=${LOGO_TOKEN}`,
+      { mode: 'cors', credentials: 'omit' }
+    );
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise(resolve => {
+      const r = new FileReader();
+      r.onloadend = () => resolve(r.result);
+      r.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
+// ─── EARNINGS DATA ── May 4–8 2026 ─────────────────────────────────────────
+// SOURCE: earningshub.com/earnings-calendar/this-week
+// UPDATED: 2026-05-03
+const WEEK_LABEL = 'May 4 – 8, 2026';
+
+const calendarData = [
+  {
+    day: 'Mon 4',
+    sections: [
+      { label: 'Before Open', type: 'before', tickers: ['NCLH','TSN','HESM','TWST'] },
+      { label: 'After Close',  type: 'after',  tickers: ['PLTR','DUOL','GRAB','PINS','ON','VRTX','BWXT','POWL','STRL','FANG','PSKY'], more: 7 }
+    ]
+  },
+  {
+    day: 'Tue 5',
+    sections: [
+      { label: 'Before Open', type: 'before', tickers: ['PYPL','SHOP','PFE','RACE','CIFR','CCJ','FISV','DOCN','ETN','ET','ADM'], more: 16 },
+      { label: 'After Close',  type: 'after',  tickers: ['SMCI','AMD','MSTR','ANET','TEM','BBAI','ALAB','NVTS','TMDX','JOBY','OXY'], more: 21 }
+    ]
+  },
+  {
+    day: 'Wed 6',
+    sections: [
+      { label: 'Before Open', type: 'before', tickers: ['UBER','DIS','OSCR','FUBO','CVS','RXRX','HUT','KHC','MAR','CART','NRG'], more: 8 },
+      { label: 'After Close',  type: 'after',  tickers: ['IONQ','ARM','APP','O','FTNT','AXON','DASH','KTOS','COKE','UUUU','SNAP'], more: 28 }
+    ]
+  },
+  {
+    day: 'Thu 7',
+    sections: [
+      { label: 'Before Open', type: 'before', tickers: ['MCD','CELH','VST','DDOG','U','SHEL','FOUR','PGY','ZTS','HWM','PTON'], more: 15 },
+      { label: 'After Close',  type: 'after',  tickers: ['COIN','RKLB','SOUN','CRWV','IREN','MELI','ABNB','TTD','NET','SMR','MP'], more: 34 }
+    ]
+  },
+  {
+    day: 'Fri 8',
+    sections: [
+      { label: 'Before Open', type: 'before', tickers: ['WULF','ENB','BAM','WEN'] }
+    ]
+  }
+];
+
+// ─── TODAY DETECTION ───────────────────────────────────────────────────────
+(function markToday() {
+  const d = new Date();
+  const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const key   = `${names[d.getDay()]} ${d.getDate()}`;
+  calendarData.forEach(c => { c.today = (c.day === key); });
+})();
+
+// ─── LOGO WRAP BUILDER ─────────────────────────────────────────────────────
+function makeLogoWrap(ticker) {
+  const wrap = document.createElement('div');
+  wrap.className = 'logo-wrap';
+
+  if (logoCache[ticker]) {
+    const img = document.createElement('img');
+    img.src   = logoCache[ticker];
+    img.alt   = ticker;
+    img.onerror = () => applyFallback(wrap, ticker);
+    wrap.appendChild(img);
+  } else {
+    applyFallback(wrap, ticker);
+  }
+  return wrap;
+}
+
+function applyFallback(wrap, ticker) {
+  wrap.innerHTML = '';
+  wrap.style.background = fallbackColor(ticker);
+  const span = document.createElement('span');
+  span.style.cssText = 'color:#fff;font-weight:700;font-size:0.58rem;';
+  span.textContent = ticker;
+  wrap.appendChild(span);
+}
+
+// ─── CALENDAR BUILDER ──────────────────────────────────────────────────────
+async function buildCalendar() {
+  document.getElementById('weekLabel').textContent = WEEK_LABEL;
+
+  // Pre-fetch all logos in parallel
+  const allTickers = [...new Set(calendarData.flatMap(d => d.sections.flatMap(s => s.tickers)))];
+  await Promise.all(allTickers.map(async t => {
+    const uri = await fetchLogo(t);
+    if (uri) logoCache[t] = uri;
+  }));
+
+  const cal = document.getElementById('cal');
+
+  calendarData.forEach(dayObj => {
+    const col = document.createElement('div');
+    col.className = 'day-col';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'day-header' + (dayObj.today ? ' today' : '');
+    hdr.textContent = dayObj.day;
+    col.appendChild(hdr);
+
+    dayObj.sections.forEach(sec => {
+      const section = document.createElement('div');
+      section.className = `section ${sec.type}`;
+
+      const lbl = document.createElement('div');
+      lbl.className = `section-label ${sec.type}`;
+      lbl.innerHTML = sec.type === 'before' ? '☀️ Before Open' : '🌙 After Close';
+      section.appendChild(lbl);
+
+      const grid = document.createElement('div');
+      grid.className = 'stocks-grid';
+
+      sec.tickers.slice(0, 11).forEach(ticker => {
+        const item = document.createElement('div');
+        item.className = 'stock-item';
+        item.title = ticker;
+
+        const wrap = makeLogoWrap(ticker);
+
+        const tk = document.createElement('div');
+        tk.className = 'ticker';
+        tk.textContent = ticker;
+
+        item.appendChild(wrap);
+        item.appendChild(tk);
+        grid.appendChild(item);
+      });
+
+      if (sec.more) {
+        const badge = document.createElement('div');
+        badge.className = 'stock-item more-badge';
+        const wrap = document.createElement('div');
+        wrap.className = 'logo-wrap';
+        wrap.textContent = `+${sec.more}`;
+        const tk = document.createElement('div');
+        tk.className = 'ticker';
+        tk.textContent = 'more';
+        badge.appendChild(wrap);
+        badge.appendChild(tk);
+        grid.appendChild(badge);
+      }
+
+      section.appendChild(grid);
+      col.appendChild(section);
+    });
+
+    cal.appendChild(col);
+  });
+
+  const now = new Date();
+  document.getElementById('footer').textContent =
+    `Actualizado: ${now.toLocaleDateString('es-ES', {day:'2-digit',month:'short',year:'numeric'})} ${now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · Fuente: earningshub.com`;
+}
+
+buildCalendar();
+</script>
+</body>
+</html>
