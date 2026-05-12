@@ -3,8 +3,30 @@
 Earnings Calendar – @MonitorFinanzas_Bot
 Runs via Claude Routine every Friday 16:00 Buenos Aires (UTC-3)
 """
-import base64, json, re, subprocess, urllib.request
+import base64, json, os, re, subprocess, sys, urllib.request
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 from datetime import datetime, timedelta
+
+def _load_env():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if not os.path.exists(env_path):
+        return
+    for enc in ('utf-16', 'utf-8-sig', 'utf-8'):
+        try:
+            with open(env_path, encoding=enc) as f:
+                content = f.read()
+            for line in content.splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, _, v = line.partition('=')
+                    os.environ.setdefault(k.strip(), v.strip())
+            return
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+
+_load_env()
+FINN_API = os.environ.get("FINN_API") or base64.b64decode("ZDdsdnAwcHIwMXFrN2x2dWsyb2dkN2x2cDBwcjAxcWs3bHZ1azJwMA==").decode()
 
 TOKEN   = base64.b64decode("ODY3MzE3Nzc1NTpBQUhuWC1iME02UWFuSmJfWjBUZEp3cldiaE5yQ3RKVnRNZw==").decode()
 CHAT_ID = "6543677004"
@@ -193,6 +215,140 @@ def normalize_day_label(raw):
         return f"{m.group(1).capitalize()} {m.group(2)}"
     return raw
 
+def fetch_finnhub(from_date, to_date):
+    if not FINN_API:
+        print("  FINN_API not set, skipping Finnhub")
+        return None
+    url = (f"https://finnhub.io/api/v1/calendar/earnings"
+           f"?from={from_date}&to={to_date}&token={FINN_API}")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+    except Exception as e:
+        print(f"  Finnhub error: {e}")
+        return None
+
+    entries = data.get("earningsCalendar", [])
+    if not entries:
+        print("  Finnhub returned 0 entries")
+        return None
+
+    by_date = {}
+    for entry in entries:
+        date_str = entry.get("date", "")
+        symbol = entry.get("symbol", "")
+        hour = entry.get("hour", "")
+        if not date_str or not symbol:
+            continue
+        if date_str not in by_date:
+            by_date[date_str] = {"before": [], "after": []}
+        bucket = "before" if hour == "bmo" else "after"
+        by_date[date_str][bucket].append(symbol)
+
+    day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+    calendar = []
+    for date_str in sorted(by_date.keys()):
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+            if d.weekday() >= 5:
+                continue
+            day_label = f"{day_names[d.weekday()]} {d.day}"
+        except Exception:
+            continue
+        sections = []
+        for stype, label in [("before", "Before Open"), ("after", "After Close")]:
+            tickers = sorted(by_date[date_str][stype])
+            if tickers:
+                display = tickers[:11]
+                more = len(tickers) - 11 if len(tickers) > 11 else 0
+                sec = {"label": label, "type": stype, "tickers": display}
+                if more:
+                    sec["more"] = more
+                sections.append(sec)
+        if sections:
+            calendar.append({"day": day_label, "sections": sections})
+
+    return calendar if calendar else None
+
+# ─── HTML UPDATE ───────────────────────────────────────────────────────────
+
+def update_html(calendar, label):
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'index.html')
+    if not os.path.exists(html_path):
+        print("  index.html not found, skipping")
+        return
+    with open(html_path, encoding='utf-8') as f:
+        html = f.read()
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    lines = [
+        f"// ─── EARNINGS DATA ── {label} ─────────────────────────────────────",
+        "// SOURCE: finnhub.io",
+        f"// UPDATED: {today}",
+        f"const WEEK_LABEL = '{label}';",
+        "",
+        "const calendarData = [",
+    ]
+    for i, day in enumerate(calendar):
+        comma = "," if i < len(calendar) - 1 else ""
+        lines.append("  {")
+        lines.append(f"    day: '{day['day']}',")
+        lines.append("    sections: [")
+        secs = day.get('sections', [])
+        for j, sec in enumerate(secs):
+            sec_comma = "," if j < len(secs) - 1 else ""
+            tickers_str = ", ".join(f"'{t}'" for t in sec['tickers'])
+            more = sec.get('more', 0)
+            more_str = f", more: {more}" if more else ""
+            lines.append(
+                f"      {{ label: '{sec['label']}', type: '{sec['type']}', "
+                f"tickers: [{tickers_str}]{more_str} }}{sec_comma}"
+            )
+        lines.append("    ]")
+        lines.append(f"  }}{comma}")
+    lines.append("];")
+    lines.append("")
+
+    new_block = "\n".join(lines) + "\n"
+    html_new = re.sub(
+        r'// [^\n]*EARNINGS DATA.*?(?=// [^\n]*TODAY DETECTION)',
+        new_block,
+        html,
+        flags=re.DOTALL
+    )
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_new)
+    print("  index.html updated")
+
+
+def push_to_github(label):
+    base = os.path.dirname(os.path.abspath(__file__))
+    if not os.path.exists(os.path.join(base, '.git')):
+        print("  No git repo, skipping push")
+        return False
+    try:
+        subprocess.run(["git", "-C", base, "add", "index.html"],
+                       check=True, capture_output=True)
+        commit = subprocess.run(["git", "-C", base, "commit", "-m", f"Earnings {label}"],
+                                capture_output=True)
+        if commit.returncode not in (0, 1):
+            raise subprocess.CalledProcessError(commit.returncode, "git commit", commit.stderr)
+        if commit.returncode == 1:
+            print("  index.html sin cambios, push omitido")
+            return True
+        r = subprocess.run(["git", "-C", base, "push"],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode == 0:
+            print("  GitHub Pages push OK")
+            return True
+        print(f"  git push failed: {r.stderr.strip()}")
+        return False
+    except subprocess.CalledProcessError as e:
+        print(f"  git error: {e.stderr.decode(errors='replace').strip() if e.stderr else e}")
+        return False
+
+
 # ─── TELEGRAM ──────────────────────────────────────────────────────────────
 
 def send_telegram(text):
@@ -236,17 +392,27 @@ if __name__ == "__main__":
     label = next_week_label()
     print(f"[{datetime.now():%Y-%m-%d %H:%M}] Target: {label}")
 
-    # Try earningshub
-    print("Fetching earningshub.com/earnings-calendar/next-week ...")
-    html = fetch_html(SOURCE)
-    print(f"  HTML: {len(html)} chars")
+    # Calculate next week date range
+    week_days = next_week_days()
+    dates = sorted(week_days.values())
+    from_date = dates[0].strftime("%Y-%m-%d")
+    to_date   = dates[-1].strftime("%Y-%m-%d")
 
-    calendar = None
-    next_data = get_next_data(html)
-    if next_data:
-        print("  __NEXT_DATA__ found, parsing ...")
-        calendar = parse_earningshub_next(next_data)
+    # Primary: Finnhub API
+    print(f"Fetching Finnhub API ({from_date} to {to_date}) ...")
+    calendar = fetch_finnhub(from_date, to_date)
 
+    # Fallback 1: earningshub scraping
+    if not calendar:
+        print("  Trying earningshub.com fallback ...")
+        html = fetch_html(SOURCE)
+        print(f"  HTML: {len(html)} chars")
+        next_data = get_next_data(html)
+        if next_data:
+            print("  __NEXT_DATA__ found, parsing ...")
+            calendar = parse_earningshub_next(next_data)
+
+    # Fallback 2: stockanalysis scraping
     if not calendar:
         print("  Trying stockanalysis.com fallback ...")
         html2 = fetch_html(BACKUP)
@@ -257,6 +423,8 @@ if __name__ == "__main__":
     if calendar:
         msg = build_message(calendar, label)
         print(f"  Calendar: {len(calendar)} days extracted")
+        update_html(calendar, label)
+        push_to_github(label)
     else:
         print("  WARNING: could not parse structured data, sending placeholder")
         msg = (
