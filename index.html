@@ -224,44 +224,45 @@ async function fetchLogo(ticker) {
   } catch { return null; }
 }
 
-// ─── EARNINGS DATA ── May 4–8 2026 ─────────────────────────────────────────
-// SOURCE: earningshub.com/earnings-calendar/this-week
-// UPDATED: 2026-05-03
-const WEEK_LABEL = 'May 4 – 8, 2026';
+// ─── EARNINGS DATA ── May 18–22, 2026 ─────────────────────────────────────
+// SOURCE: finnhub.io
+// UPDATED: 2026-05-12
+const WEEK_LABEL = 'May 18–22, 2026';
 
 const calendarData = [
   {
-    day: 'Mon 4',
+    day: 'Mon 18',
     sections: [
-      { label: 'Before Open', type: 'before', tickers: ['NCLH','TSN','HESM','TWST'] },
-      { label: 'After Close',  type: 'after',  tickers: ['PLTR','DUOL','GRAB','PINS','ON','VRTX','BWXT','POWL','STRL','FANG','PSKY'], more: 7 }
+      { label: 'Before Open', type: 'before', tickers: ['BIDU', 'CGEN', 'IQ', 'LNZA', 'MDV', 'NIU', 'SOHU'] },
+      { label: 'After Close', type: 'after', tickers: ['AAPI', 'AATC', 'ACCR', 'AGPU', 'AGSS', 'AGYS', 'AMZE', 'AREC', 'ARQQ', 'ASPI', 'ATEK'], more: 129 }
     ]
   },
   {
-    day: 'Tue 5',
+    day: 'Tue 19',
     sections: [
-      { label: 'Before Open', type: 'before', tickers: ['PYPL','SHOP','PFE','RACE','CIFR','CCJ','FISV','DOCN','ETN','ET','ADM'], more: 16 },
-      { label: 'After Close',  type: 'after',  tickers: ['SMCI','AMD','MSTR','ANET','TEM','BBAI','ALAB','NVTS','TMDX','JOBY','OXY'], more: 21 }
+      { label: 'Before Open', type: 'before', tickers: ['AS', 'CRNT', 'MMYT'] },
+      { label: 'After Close', type: 'after', tickers: ['AAME', 'AIFC', 'ARTL', 'AUNA', 'BAYA', 'BBWI', 'BILI', 'BMTM', 'CAVA', 'CCIF', 'CEIN'], more: 46 }
     ]
   },
   {
-    day: 'Wed 6',
+    day: 'Wed 20',
     sections: [
-      { label: 'Before Open', type: 'before', tickers: ['UBER','DIS','OSCR','FUBO','CVS','RXRX','HUT','KHC','MAR','CART','NRG'], more: 8 },
-      { label: 'After Close',  type: 'after',  tickers: ['IONQ','ARM','APP','O','FTNT','AXON','DASH','KTOS','COKE','UUUU','SNAP'], more: 28 }
+      { label: 'Before Open', type: 'before', tickers: ['ADI', 'BZ', 'HAS', 'IPSC', 'LOW', 'SGMT', 'TGT', 'WSM', 'ZIM'] },
+      { label: 'After Close', type: 'after', tickers: ['ACRV', 'ALMS', 'AMCI', 'ARCO', 'ASFH', 'ATAT', 'BIAF', 'BLGO', 'BLMH', 'BNC', 'BORR'], more: 54 }
     ]
   },
   {
-    day: 'Thu 7',
+    day: 'Thu 21',
     sections: [
-      { label: 'Before Open', type: 'before', tickers: ['MCD','CELH','VST','DDOG','U','SHEL','FOUR','PGY','ZTS','HWM','PTON'], more: 15 },
-      { label: 'After Close',  type: 'after',  tickers: ['COIN','RKLB','SOUN','CRWV','IREN','MELI','ABNB','TTD','NET','SMR','MP'], more: 34 }
+      { label: 'Before Open', type: 'before', tickers: ['DAO', 'DAVA', 'DE', 'DSX', 'FRO', 'HLNE', 'LPG', 'NTES', 'TEN', 'WMS'] },
+      { label: 'After Close', type: 'after', tickers: ['AAP', 'AMWD', 'ANVI', 'BKE', 'BRC', 'BULL', 'CLGN', 'CVCO', 'DECK', 'DOMO', 'FLO'], more: 25 }
     ]
   },
   {
-    day: 'Fri 8',
+    day: 'Fri 22',
     sections: [
-      { label: 'Before Open', type: 'before', tickers: ['WULF','ENB','BAM','WEN'] }
+      { label: 'Before Open', type: 'before', tickers: ['BAH'] },
+      { label: 'After Close', type: 'after', tickers: ['BJ', 'NXXT'] }
     ]
   }
 ];
